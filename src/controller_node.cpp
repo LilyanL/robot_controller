@@ -2,12 +2,19 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "std_srvs/srv/trigger.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
+#include "robot_interfaces/action/go_to_pose.hpp"
+
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 
 class ControllerNode : public rclcpp::Node
 {
+
+using GoToPose = robot_interfaces::action::GoToPose;
+using GoalHandleGoToPose = rclcpp_action::ServerGoalHandle<GoToPose>;
+
 public:
     ControllerNode()
     : Node("controller_node"), x_(0.0), y_(0.0), theta_(0.0)
@@ -78,6 +85,16 @@ public:
                 this->resetPoseCallback(req, res);
             }
         );
+
+        // Create action server for GoToPose 
+        action_server_ = rclcpp_action::create_server<GoToPose>(
+            this,
+            "go_to_pose",
+            std::bind(&ControllerNode::handleGoal, this, _1, _2),
+            std::bind(&ControllerNode::handleCancel, this, _1),
+            std::bind(&ControllerNode::handleAccepted, this, _1)
+        );
+            
 
         RCLCPP_INFO(this->get_logger(), "ControllerNode has started.");
     }
@@ -156,6 +173,68 @@ private:
     }
 
 
+
+    // Action server callbacks
+    rclcpp_action::GoalResponse handleGoal(
+        const rclcpp_action::GoalUUID &uuid,
+        std::shared_ptr<const GoToPose::Goal> goal)
+    {
+        RCLCPP_INFO(this->get_logger(), "Received goal request with target (%.2f, %.2f)", goal->target_x, goal->target_y);
+        (void)uuid;
+        // Accept all goals
+        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    }
+
+    rclcpp_action::CancelResponse handleCancel(
+        const std::shared_ptr<GoalHandleGoToPose> goal_handle)
+    {
+        RCLCPP_INFO(this->get_logger(), "Received request to cancel goal");
+        (void)goal_handle;
+        return rclcpp_action::CancelResponse::ACCEPT;
+    }
+
+    void handleAccepted(const std::shared_ptr<GoalHandleGoToPose> goal_handle)
+    {
+        // This needs to return quickly to avoid blocking the executor, so spin up a new thread
+        std::thread{std::bind(&ControllerNode::execute, this, _1), goal_handle}.detach();
+    }
+
+    // Execute the goal
+    void execute(const std::shared_ptr<GoalHandleGoToPose> goal_handle)
+{
+    auto goal = goal_handle->get_goal();
+    auto feedback = std::make_shared<GoToPose::Feedback>();
+    auto result = std::make_shared<GoToPose::Result>();
+
+    double target_x = goal->target_x;
+    double target_y = goal->target_y;
+
+    rclcpp::Rate loop_rate(10);
+
+    while (rclcpp::ok()) {
+        double dx = target_x - x_;
+        double dy = target_y - y_;
+        double dist = std::sqrt(dx*dx + dy*dy);
+
+        feedback->distance_remaining = dist;
+        goal_handle->publish_feedback(feedback);
+
+        if (dist < 0.1) {
+            result->success = true;
+            goal_handle->succeed(result);
+            RCLCPP_INFO(this->get_logger(), "Goal reached!");
+            return;
+        }
+
+        // Simple proportional control
+        vx_ = 0.2 * dx;
+        vy_ = 0.2 * dy;
+
+        loop_rate.sleep();
+    }
+}
+
+
     // ROS interfaces
 
     // Subscriptions and Publications
@@ -170,6 +249,9 @@ private:
 
     // Parameter callback handle
     OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+
+    // Action server
+    rclcpp_action::Server<GoToPose>::SharedPtr action_server_;
 
     // Internal state
     double x_, y_, theta_;

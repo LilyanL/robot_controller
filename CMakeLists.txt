@@ -18,9 +18,11 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(robot_interfaces REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -33,9 +35,20 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+add_executable(controller_node src/controller_node.cpp)
+ament_target_dependencies(controller_node 
+rclcpp 
+rclcpp_action 
+geometry_msgs 
+nav_msgs 
+std_srvs
+robot_interfaces
+)
+
+install(TARGETS controller_node DESTINATION lib/${PROJECT_NAME})
+
+ament_export_dependencies(rosidl_default_runtime)
 ament_package()
 
 
-add_executable(controller_node src/controller_node.cpp)
-ament_target_dependencies(controller_node rclcpp geometry_msgs nav_msgs std_srvs)
-install(TARGETS controller_node DESTINATION lib/${PROJECT_NAME})
+
