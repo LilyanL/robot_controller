@@ -1,8 +1,10 @@
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "std_srvs/srv/trigger.hpp"
 
 using std::placeholders::_1;
+using std::placeholders::_2;
 
 class ControllerNode : public rclcpp::Node
 {
@@ -23,6 +25,23 @@ public:
             std::chrono::milliseconds(100),
             std::bind(&ControllerNode::updateOdom, this)
         );
+
+        // Create a service to reset pose
+        // reset_service_ = this->create_service<std_srvs::srv::Trigger>(
+        //    "/reset_pose",
+        //    std::bind(&ControllerNode::resetPoseCallback, this, _1, _2)
+        //);
+
+        // Create a service to reset pose (lambda version)
+        reset_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "/reset_pose",
+            [this](const std::shared_ptr<std_srvs::srv::Trigger::Request> req,
+                   std::shared_ptr<std_srvs::srv::Trigger::Response> res)
+            {
+                this->resetPoseCallback(req, res);
+            }
+        );
+
 
         RCLCPP_INFO(this->get_logger(), "ControllerNode has started.");
     }
@@ -57,10 +76,25 @@ private:
         odom_pub_->publish(msg);
     }
 
+    void resetPoseCallback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        (void)request; // unused
+        x_ = 0.0;
+        y_ = 0.0;
+        theta_ = 0.0;
+        response->success = true;
+        response->message = "Pose reset to (0,0,0)";
+        RCLCPP_INFO(this->get_logger(), "Pose has been reset.");
+    }
+
+
     // ROS interfaces
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr vel_sub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_service_;
 
     // Internal state
     double x_, y_, theta_;

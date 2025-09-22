@@ -20,6 +20,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -36,5 +37,5 @@ ament_package()
 
 
 add_executable(controller_node src/controller_node.cpp)
-ament_target_dependencies(controller_node rclcpp geometry_msgs nav_msgs)
+ament_target_dependencies(controller_node rclcpp geometry_msgs nav_msgs std_srvs)
 install(TARGETS controller_node DESTINATION lib/${PROJECT_NAME})
