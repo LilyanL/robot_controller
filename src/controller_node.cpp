@@ -42,6 +42,10 @@ public:
             }
         );
 
+        // Declare configurable parameters
+        this->declare_parameter<double>("max_speed", 1.0);
+        this->declare_parameter<double>("odom_frequency", 10.0);
+
 
         RCLCPP_INFO(this->get_logger(), "ControllerNode has started.");
     }
@@ -49,8 +53,38 @@ public:
 private:
     void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
     {
-        vx_ = msg->linear.x;
-        vy_ = msg->linear.y;
+
+        // Get max speed parameter
+        double max_speed = this->get_parameter("max_speed").as_double();
+        
+        // Clamp velocities to max speed
+        if (msg->linear.x > max_speed)
+        {
+            vx_ = max_speed;
+        }
+        else if (msg->linear.x < -max_speed)
+        {
+            vx_ = -max_speed;
+        }
+        else
+        {
+            vx_ = msg->linear.x;
+        }
+
+        if (msg->linear.y > max_speed)
+        {
+            vy_ = max_speed;
+        }
+        else if (msg->linear.y < -max_speed)
+        {
+            vy_ = -max_speed;
+        }
+        else
+        {
+            vy_ = msg->linear.y;
+        }
+
+        // Angular velocity is not clamped for simplicity
         vtheta_ = msg->angular.z;
     }
 
