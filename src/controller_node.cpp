@@ -12,6 +12,12 @@ public:
     ControllerNode()
     : Node("controller_node"), x_(0.0), y_(0.0), theta_(0.0)
     {
+
+        // Declare configurable parameters
+        this->declare_parameter<double>("max_speed", 1.0);
+        this->declare_parameter<double>("odom_frequency", 10.0);
+
+
         // Subscribe to velocity commands
         vel_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
             "/cmd_vel", 10, std::bind(&ControllerNode::cmdVelCallback, this, _1)
@@ -19,6 +25,37 @@ public:
 
         // Publish simulated odometry
         odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
+
+        // Setup parameter change callback
+        this->set_on_parameters_set_callback(
+            [this](const std::vector<rclcpp::Parameter> &params)
+            {
+                for (const auto &param : params)
+                {
+                    if (param.get_name() == "odom_frequency")
+                    {
+                        double freq = param.as_double();
+                        if (freq <= 0.0)
+                        {
+                            RCLCPP_WARN(this->get_logger(), "odom_frequency must be positive. Reverting to previous value.");
+                            this->set_parameter(rclcpp::Parameter("odom_frequency", this->get_parameter("odom_frequency").as_double()));
+                        }
+                        else
+                        {
+                            // Update timer period
+                            auto period = std::chrono::milliseconds(static_cast<int>(1000.0 / freq));
+                            timer_->cancel();
+                            timer_ = this->create_wall_timer(
+                                period,
+                                std::bind(&ControllerNode::updateOdom, this)
+                            );
+                            RCLCPP_INFO(this->get_logger(), "Updated odom_frequency to %.2f Hz", freq);
+                        }
+                    }
+                }
+                return rcl_interfaces::msg::SetParametersResult().set__successful(true);
+            }
+        );
 
         // Update odometry at 10Hz
         timer_ = this->create_wall_timer(
@@ -41,11 +78,6 @@ public:
                 this->resetPoseCallback(req, res);
             }
         );
-
-        // Declare configurable parameters
-        this->declare_parameter<double>("max_speed", 1.0);
-        this->declare_parameter<double>("odom_frequency", 10.0);
-
 
         RCLCPP_INFO(this->get_logger(), "ControllerNode has started.");
     }
