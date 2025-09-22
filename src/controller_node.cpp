@@ -27,7 +27,7 @@ public:
         odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
 
         // Setup parameter change callback
-        this->set_on_parameters_set_callback(
+        param_callback_handle_ = this->add_on_set_parameters_callback(
             [this](const std::vector<rclcpp::Parameter> &params)
             {
                 for (const auto &param : params)
@@ -157,10 +157,19 @@ private:
 
 
     // ROS interfaces
+
+    // Subscriptions and Publications
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr vel_sub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+
+    // Timer
     rclcpp::TimerBase::SharedPtr timer_;
+
+    // Services 
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_service_;
+
+    // Parameter callback handle
+    OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
 
     // Internal state
     double x_, y_, theta_;
