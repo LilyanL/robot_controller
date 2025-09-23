@@ -23,6 +23,8 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(robot_interfaces REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -43,6 +45,8 @@ geometry_msgs
 nav_msgs 
 std_srvs
 robot_interfaces
+tf2
+tf2_ros
 )
 
 install(TARGETS controller_node DESTINATION lib/${PROJECT_NAME})

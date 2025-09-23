@@ -4,6 +4,9 @@
 #include "std_srvs/srv/trigger.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "robot_interfaces/action/go_to_pose.hpp"
+#include "tf2_ros/transform_broadcaster.h"
+#include "tf2/LinearMath/Quaternion.h"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 
 
 using std::placeholders::_1;
@@ -94,6 +97,9 @@ public:
             std::bind(&ControllerNode::handleCancel, this, _1),
             std::bind(&ControllerNode::handleAccepted, this, _1)
         );
+
+        // Initialize TF broadcaster
+        tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
             
 
         RCLCPP_INFO(this->get_logger(), "ControllerNode has started.");
@@ -139,25 +145,53 @@ private:
 
     void updateOdom()
     {
-        double dt = 0.1; // 100ms
-        x_ += vx_ * dt;
-        y_ += vy_ * dt;
-        theta_ += vtheta_ * dt;
 
-        auto msg = nav_msgs::msg::Odometry();
-        msg.header.stamp = this->get_clock()->now();
-        msg.header.frame_id = "odom";
-        msg.child_frame_id = "base_link";
-        msg.pose.pose.position.x = x_;
-        msg.pose.pose.position.y = y_;
-        msg.pose.pose.orientation.z = sin(theta_ / 2.0);
-        msg.pose.pose.orientation.w = cos(theta_ / 2.0);
-        msg.twist.twist.linear.x = vx_;
-        msg.twist.twist.linear.y = vy_;
-        msg.twist.twist.angular.z = vtheta_;
+    double dt = 0.1; // 100ms
+    x_ += vx_ * dt;
+    y_ += vy_ * dt;
+    theta_ += vtheta_ * dt;
 
-        odom_pub_->publish(msg);
-    }
+    // Create quaternion from yaw
+    tf2::Quaternion q;
+    q.setRPY(0, 0, theta_);
+    q.normalize();  // for safety
+
+    // Publish odom
+    auto msg = nav_msgs::msg::Odometry();
+    msg.header.stamp = this->get_clock()->now();
+    msg.header.frame_id = "odom";
+    msg.child_frame_id = "base_link";
+    msg.pose.pose.position.x = x_;
+    msg.pose.pose.position.y = y_;
+    msg.pose.pose.position.z = 0.0; // robot au sol
+    msg.pose.pose.orientation.x = q.x();
+    msg.pose.pose.orientation.y = q.y();
+    msg.pose.pose.orientation.z = q.z();
+    msg.pose.pose.orientation.w = q.w();
+
+    msg.twist.twist.linear.x = vx_;
+    msg.twist.twist.linear.y = vy_;
+    msg.twist.twist.angular.z = vtheta_;
+
+    odom_pub_->publish(msg);
+
+    // Publish TF (odom -> base_link)
+    geometry_msgs::msg::TransformStamped t;
+    t.header.stamp = this->get_clock()->now();
+    t.header.frame_id = "odom";
+    t.child_frame_id = "base_link";
+
+    t.transform.translation.x = x_;
+    t.transform.translation.y = y_;
+    t.transform.translation.z = 0.0;
+    t.transform.rotation.x = q.x();
+    t.transform.rotation.y = q.y();
+    t.transform.rotation.z = q.z();
+    t.transform.rotation.w = q.w();
+
+    tf_broadcaster_->sendTransform(t);
+}
+
 
     void resetPoseCallback(
         const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
@@ -252,6 +286,9 @@ private:
 
     // Action server
     rclcpp_action::Server<GoToPose>::SharedPtr action_server_;
+
+    // TF broadcaster
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     // Internal state
     double x_, y_, theta_;
